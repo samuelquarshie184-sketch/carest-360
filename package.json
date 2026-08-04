@@ -1,0 +1,25 @@
+{
+  "name": "carest-360",
+  "version": "2.2.15",
+  "private": true,
+  "description": "CAREST College of Health public site and CAREST 360 accounting and financial management system.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js && node --check public/app.js && node --check db/migrate.js",
+    "test": "node --test",
+    "db:migrate": "node db/migrate.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.6.1",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.16.3",
+    "pdfkit": "^0.17.1",
+    "exceljs": "^4.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

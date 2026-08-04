@@ -1,0 +1,46 @@
+name: carest360
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: carest
+      POSTGRES_USER: carest
+      POSTGRES_PASSWORD: carest_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - carest-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U carest -d carest"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - carest-redis:/data
+    command: redis-server --appendonly yes
+
+  storage:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: carest
+      MINIO_ROOT_PASSWORD: carest_dev_storage_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - carest-storage:/data
+    command: server /data --console-address ":9001"
+
+volumes:
+  carest-postgres:
+  carest-redis:
+  carest-storage:

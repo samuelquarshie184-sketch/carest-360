@@ -1,0 +1,413 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Tenant {
+  id                 String             @id @default(cuid())
+  name               String
+  slug               String             @unique
+  currency           String             @default("GHS")
+  timezone           String             @default("Africa/Accra")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  campuses           Campus[]
+  departments        Department[]
+  programmes         Programme[]
+  feeSchedules       FeeSchedule[]
+  academicYears      AcademicYear[]
+  students           Student[]
+  feeTypes           FeeType[]
+  revenueCategories  RevenueCategory[]
+  expenseCategories  ExpenseCategory[]
+  paymentMethods     PaymentMethod[]
+  users              User[]
+  auditEvents        AuditEvent[]
+  fileObjects        FileObject[]
+  chartOfAccounts    ChartOfAccount[]
+  fiscalPeriods      FiscalPeriod[]
+  bankAccounts       BankAccount[]
+  budgets            Budget[]
+}
+
+model Campus {
+  id          String      @id @default(cuid())
+  tenantId    String
+  name        String
+  code        String
+  active      Boolean     @default(true)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  departments Department[]
+  students    Student[]
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+}
+
+model Department {
+  id         String      @id @default(cuid())
+  tenantId   String
+  campusId   String?
+  name       String
+  code       String
+  active     Boolean     @default(true)
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus     Campus?     @relation(fields: [campusId], references: [id], onDelete: SetNull)
+  programmes Programme[]
+  @@unique([tenantId, code])
+}
+
+model ChartOfAccount {
+  id            String          @id @default(cuid())
+  tenantId      String
+  parentId      String?
+  code          String
+  name          String
+  accountType   String
+  active        Boolean         @default(true)
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent        ChartOfAccount? @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children      ChartOfAccount[] @relation("AccountHierarchy")
+  ledgerEntries LedgerEntry[]
+  budgetLines   BudgetLine[]
+  @@unique([tenantId, code])
+  @@index([tenantId, accountType, active])
+}
+
+model FiscalPeriod {
+  id            String        @id @default(cuid())
+  tenantId      String
+  name          String
+  startsOn      DateTime
+  endsOn        DateTime
+  status        String        @default("OPEN")
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ledgerEntries LedgerEntry[]
+  budgets       Budget[]
+  @@unique([tenantId, name])
+}
+
+model BankAccount {
+  id                     String                @id @default(cuid())
+  tenantId               String
+  name                   String
+  bankName               String
+  accountNumberMasked    String?
+  currency               String                @default("GHS")
+  active                 Boolean               @default(true)
+  tenant                 Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ledgerEntries          LedgerEntry[]
+  reconciliations        BankReconciliation[]
+  @@unique([tenantId, name])
+}
+
+model BankReconciliation {
+  id                    String      @id @default(cuid())
+  bankAccountId         String
+  statementDate         DateTime
+  closingBalanceMinor   Int
+  status                String      @default("OPEN")
+  notes                 String?
+  bankAccount           BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  @@unique([bankAccountId, statementDate])
+}
+
+model Budget {
+  id             String        @id @default(cuid())
+  tenantId       String
+  fiscalPeriodId String
+  name           String
+  status         String        @default("DRAFT")
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fiscalPeriod   FiscalPeriod  @relation(fields: [fiscalPeriodId], references: [id], onDelete: Restrict)
+  lines          BudgetLine[]
+  @@unique([tenantId, fiscalPeriodId, name])
+}
+
+model BudgetLine {
+  id             String         @id @default(cuid())
+  budgetId       String
+  accountId      String
+  amountMinor    Int
+  currency       String         @default("GHS")
+  budget         Budget         @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  account        ChartOfAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  @@unique([budgetId, accountId])
+}
+
+model Programme {
+  id             String          @id @default(cuid())
+  tenantId       String
+  departmentId   String?
+  code           String
+  name           String
+  level          String
+  durationLabel  String?
+  active         Boolean         @default(true)
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  department     Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  enrolments     StudentEnrolment[]
+  feeSchedules   FeeSchedule[]
+  @@unique([tenantId, code])
+}
+
+model AcademicYear {
+  id          String      @id @default(cuid())
+  tenantId    String
+  label       String
+  startsOn    DateTime
+  endsOn      DateTime
+  active      Boolean     @default(true)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  semesters   Semester[]
+  enrolments  StudentEnrolment[]
+  bills       StudentBill[]
+  payments    ManualPayment[]
+  @@unique([tenantId, label])
+}
+
+model Semester {
+  id             String          @id @default(cuid())
+  academicYearId String
+  name           String
+  startsOn       DateTime
+  endsOn         DateTime
+  active         Boolean         @default(true)
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  bills          StudentBill[]
+  payments       ManualPayment[]
+  @@unique([academicYearId, name])
+}
+
+model Student {
+  id           String              @id @default(cuid())
+  tenantId     String
+  campusId     String?
+  studentNo    String
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+  status       String              @default("ACTIVE")
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campus       Campus?             @relation(fields: [campusId], references: [id], onDelete: SetNull)
+  enrolments   StudentEnrolment[]
+  bills        StudentBill[]
+  payments     ManualPayment[]
+  @@unique([tenantId, studentNo])
+  @@index([tenantId, lastName, firstName])
+}
+
+model StudentEnrolment {
+  id           String       @id @default(cuid())
+  studentId    String
+  programmeId  String
+  academicYearId String
+  status       String       @default("ACTIVE")
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  programme    Programme    @relation(fields: [programmeId], references: [id], onDelete: Restrict)
+  academicYear AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  @@unique([studentId, programmeId, academicYearId])
+}
+
+model FeeType {
+  id            String        @id @default(cuid())
+  tenantId      String
+  code          String
+  name          String
+  description   String?
+  active        Boolean       @default(true)
+  recurring     Boolean       @default(false)
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scheduleLines FeeScheduleLine[]
+  billLines     BillLine[]
+  payments      ManualPayment[]
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+}
+
+model FeeSchedule {
+  id             String           @id @default(cuid())
+  tenantId       String
+  programmeId    String?
+  academicYearId String
+  name           String
+  active         Boolean          @default(true)
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  programme      Programme?       @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+  academicYear   AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  lines          FeeScheduleLine[]
+}
+
+model FeeScheduleLine {
+  id            String      @id @default(cuid())
+  feeScheduleId String
+  feeTypeId     String
+  amountMinor   Int
+  currency      String      @default("GHS")
+  feeSchedule   FeeSchedule @relation(fields: [feeScheduleId], references: [id], onDelete: Cascade)
+  feeType       FeeType     @relation(fields: [feeTypeId], references: [id], onDelete: Restrict)
+  @@unique([feeScheduleId, feeTypeId])
+}
+
+model StudentBill {
+  id             String       @id @default(cuid())
+  tenantId       String
+  studentId      String
+  academicYearId String
+  semesterId     String
+  status         String       @default("OPEN")
+  currency       String       @default("GHS")
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicYear   AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  semester       Semester      @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+  lines          BillLine[]
+  payments       ManualPayment[]
+  @@unique([studentId, academicYearId, semesterId])
+  @@index([tenantId, status])
+}
+
+model BillLine {
+  id          String      @id @default(cuid())
+  billId      String
+  feeTypeId   String
+  description String
+  amountMinor Int
+  currency    String      @default("GHS")
+  bill        StudentBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  feeType     FeeType     @relation(fields: [feeTypeId], references: [id], onDelete: Restrict)
+}
+
+model RevenueCategory {
+  id          String          @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  accountCode String?
+  active      Boolean         @default(true)
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ledgerLines LedgerEntry[]
+  @@unique([tenantId, code])
+}
+
+model ExpenseCategory {
+  id          String          @id @default(cuid())
+  tenantId    String
+  code        String
+  name        String
+  accountCode String?
+  active      Boolean         @default(true)
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model PaymentMethod {
+  id        String   @id @default(cuid())
+  tenantId  String
+  code      String
+  name      String
+  active    Boolean  @default(true)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments  ManualPayment[]
+  @@unique([tenantId, code])
+}
+
+model ManualPayment {
+  id                    String        @id @default(cuid())
+  tenantId              String
+  studentId             String
+  billId                String?
+  feeTypeId             String
+  academicYearId        String
+  semesterId            String
+  paymentMethodId       String?
+  studentNameSnapshot   String
+  receiptNumber         String
+  bankName              String?
+  depositSlipNumber     String?
+  tellerNumber          String?
+  paymentDate           DateTime
+  amountMinor           Int
+  currency              String        @default("GHS")
+  status                String        @default("VERIFIED")
+  recordedByUserId      String
+  evidenceFileId        String?
+  createdAt             DateTime      @default(now())
+  student               Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  bill                  StudentBill?  @relation(fields: [billId], references: [id], onDelete: SetNull)
+  feeType               FeeType       @relation(fields: [feeTypeId], references: [id], onDelete: Restrict)
+  academicYear          AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  semester              Semester      @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+  paymentMethod         PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  ledgerEntries         LedgerEntry[]
+  @@unique([tenantId, receiptNumber])
+  @@index([tenantId, studentId, paymentDate])
+}
+
+model LedgerEntry {
+  id                String           @id @default(cuid())
+  tenantId          String
+  manualPaymentId   String?
+  revenueCategoryId String?
+  accountCode       String
+  accountId         String?
+  fiscalPeriodId    String?
+  bankAccountId     String?
+  direction         String
+  amountMinor       Int
+  currency          String           @default("GHS")
+  postedAt          DateTime         @default(now())
+  manualPayment     ManualPayment?   @relation(fields: [manualPaymentId], references: [id], onDelete: SetNull)
+  revenueCategory   RevenueCategory? @relation(fields: [revenueCategoryId], references: [id], onDelete: SetNull)
+  account           ChartOfAccount?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  fiscalPeriod      FiscalPeriod?    @relation(fields: [fiscalPeriodId], references: [id], onDelete: SetNull)
+  bankAccount       BankAccount?     @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  @@index([tenantId, postedAt])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  name      String
+  role      String
+  active    Boolean  @default(true)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  auditEvents AuditEvent[]
+  @@unique([tenantId, email])
+}
+
+model FileObject {
+  id          String   @id @default(cuid())
+  tenantId    String
+  objectKey   String
+  bucket      String
+  contentType String
+  byteSize    Int
+  sha256      String?
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@unique([bucket, objectKey])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     String
+  entityType String
+  entityId   String
+  beforeJson Json?
+  afterJson  Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
+}
